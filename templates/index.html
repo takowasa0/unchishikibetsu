@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ウンチを描こう!!</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            cursor: crosshair;
+        }
+        .color-button, .tool-button {
+            margin: 5px;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+            color: white;
+            font-size: 16px;
+        }
+        .red { background-color: rgb(241, 109, 0); }
+        .blue { background-color: rgba(47, 19, 3, 0.811); }
+        .green { background-color: rgb(183, 128, 0); }
+        .yellow { background-color: rgb(125, 67, 0); color: black; }
+        .eraser { background-color: gray; }
+        .clear { background-color: black; }
+        .send { background-color: orange; color: black; }
+    </style>
+</head>
+<body>
+    <h1>ウンチを描こう!!</h1>
+    <p>ボタンを押して色を変更したり、消しゴムや全クリアを使えます。</p>
+    <!-- 色変更ボタン -->
+    <button class="color-button red">赤い茶色</button>
+    <button class="color-button blue">黒い茶色</button>
+    <button class="color-button green">薄い茶色</button>
+    <button class="color-button yellow" id="defaultColor">茶色</button>
+    <!-- ツールボタン -->
+    <button class="tool-button eraser" data-tool="eraser">消しゴム</button>
+    <button class="tool-button clear" data-tool="clear">全部クリア</button>
+    <!-- 画像送信ボタン -->
+    <button class="tool-button send" id="sendButton">画像を送信</button>
+    <canvas id="drawingCanvas" width="600" height="400"></canvas>
+    <div id="result"></div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 初期設定
+        const defaultColorButton = document.getElementById('defaultColor');
+        const defaultColorStyle = window.getComputedStyle(defaultColorButton).backgroundColor; // CSSから背景色を取得
+        ctx.lineWidth = 5; // 線の太さ
+        ctx.lineCap = 'round'; // 線の端を丸く
+        let currentColor = defaultColorStyle; // 初期の色をCSSの茶色に設定
+        ctx.strokeStyle = currentColor;
+
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+        let isEraser = false; // 消しゴムモードかどうか
+
+        // 描画開始
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        });
+
+        // 描画中
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.strokeStyle = isEraser ? 'white' : currentColor; // 消しゴムなら白
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        });
+
+        // 描画終了
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mouseout', () => isDrawing = false);
+
+        // 色変更ボタンの処理
+        const colorButtons = document.querySelectorAll('.color-button');
+        colorButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                isEraser = false; // 消しゴムモードを解除
+
+                // CSSの背景色を取得して線の色に設定
+                const buttonStyle = window.getComputedStyle(button);
+                currentColor = buttonStyle.backgroundColor;
+                ctx.strokeStyle = currentColor; // 描画色を更新
+            });
+        });
+
+        // 消しゴムや全クリアボタンの処理
+        const toolButtons = document.querySelectorAll('.tool-button');
+        toolButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tool = button.getAttribute('data-tool');
+                if (tool === 'eraser') {
+                    isEraser = true; // 消しゴムモード
+                    ctx.lineWidth = 10; // 消しゴムを太くする（任意）
+                } else if (tool === 'clear') {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height); // 全クリア
+                    isEraser = false; // 消しゴムモードを解除
+                }
+            });
+        });
+
+        // 画像送信ボタンの処理
+        const sendButton = document.getElementById('sendButton');
+        const resultDiv = document.getElementById('result');
+
+        sendButton.addEventListener('click', async () => {
+    const imageData = canvas.toDataURL('image/png'); // キャンバスのデータをBase64形式で取得
+    console.log("送信データ: ", imageData); // デバッグ用
+
+    try {
+        const response = await fetch('/upload', { // Flaskエンドポイント '/upload' にリクエスト
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json', // JSON形式で送信
+            },
+            body: JSON.stringify({ image: imageData }), // 画像データを送信
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log("サーバーのレスポンス: ", result); // デバッグ用
+            resultDiv.textContent = `判定結果: 💩に似ている度は ${result.similarity}% です！`;
+        } else {
+            console.error("サーバーエラー: ", response.status, response.statusText);
+            resultDiv.textContent = 'エラーが発生しました。';
+        }
+    } catch (error) {
+        console.error("通信エラー: ", error); // デバッグ用
+        resultDiv.textContent = '通信エラーが発生しました。';
+    }
+});
+
+
+    </script>
+</body>
+</html>
